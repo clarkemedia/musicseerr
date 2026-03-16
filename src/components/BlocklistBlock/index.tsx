@@ -64,8 +64,8 @@ const BlocklistBlock = ({
       });
     }
 
-    onUpdate && onUpdate();
-    onDelete && onDelete();
+    onUpdate?.();
+    onDelete?.();
 
     setIsUpdating(false);
   };
