@@ -622,7 +622,7 @@ describe('OpenID Connect', () => {
     });
   });
 
-  describe('with PKCE support (no state)', function () {
+  describe('with PKCE support (uses state and PKCE)', function () {
     before(async () => {
       await setupFetchMock({ supportsPKCE: true });
     });
@@ -631,7 +631,7 @@ describe('OpenID Connect', () => {
       fetchMock.hardReset();
     });
 
-    it('login endpoint does not include state parameter', async function () {
+    it('login endpoint includes both state and PKCE parameters', async function () {
       const response = await request(app)
         .get('/auth/oidc/login/test')
         .set('Accept', 'application/json');
@@ -639,7 +639,7 @@ describe('OpenID Connect', () => {
       assert.strictEqual(response.status, 200);
 
       const params = new URL(response.body.redirectUrl);
-      assert.strictEqual(params.searchParams.get('state'), null);
+      assert.ok(params.searchParams.get('state'));
       assert.ok(params.searchParams.get('code_challenge'));
       assert.strictEqual(
         params.searchParams.get('code_challenge_method'),
