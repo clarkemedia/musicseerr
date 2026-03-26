@@ -40,7 +40,7 @@ export class User {
     return users.map((u) => u.filter(showFiltered));
   }
 
-  static readonly filteredFields: string[] = [
+  static readonly filteredFields: (keyof User)[] = [
     'email',
     'plexId',
     'password',
@@ -49,6 +49,7 @@ export class User {
     'jellyfinAuthToken',
     'plexToken',
     'settings',
+    'linkedAccounts',
   ];
 
   public displayName: string;
