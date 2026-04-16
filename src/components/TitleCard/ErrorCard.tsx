@@ -45,13 +45,21 @@ const ErrorCard = ({ id, tmdbId, tvdbId, type, canExpand }: ErrorCardProps) => {
           <div className="absolute left-0 right-0 flex items-center justify-between p-2">
             <div
               className={`pointer-events-none z-40 rounded-full shadow ${
-                type === 'movie' ? 'bg-blue-500' : 'bg-green-600'
+                type === 'movie'
+                  ? 'bg-blue-500'
+                  : type === 'music-album' || type === 'music-artist'
+                    ? 'bg-purple-600'
+                    : 'bg-green-600'
               }`}
             >
               <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
                 {type === 'movie'
                   ? intl.formatMessage(globalMessages.movie)
-                  : intl.formatMessage(globalMessages.tvshow)}
+                  : type === 'music-album'
+                    ? intl.formatMessage(globalMessages.album)
+                    : type === 'music-artist'
+                      ? intl.formatMessage(globalMessages.artist)
+                      : intl.formatMessage(globalMessages.tvshow)}
               </div>
             </div>
             <div className="pointer-events-none z-40">

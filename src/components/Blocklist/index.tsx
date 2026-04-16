@@ -445,19 +445,23 @@ const BlocklistedItem = ({ item, revalidateList }: BlocklistedItemProps) => {
             </div>
           )}
           <div className="card-field">
-            {item.mediaType === 'movie' ? (
-              <div className="pointer-events-none z-40 self-start rounded-full border border-blue-500 bg-blue-600/80 shadow-md">
-                <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
-                  {intl.formatMessage(globalMessages.movie)}
-                </div>
+            <div
+              className={`pointer-events-none z-40 self-start rounded-full border shadow-md ${
+                item.mediaType === 'movie'
+                  ? 'border-blue-500 bg-blue-600/80'
+                  : item.mediaType === 'music'
+                    ? 'border-purple-500 bg-purple-600/80'
+                    : 'border-green-600 bg-green-600/80'
+              }`}
+            >
+              <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
+                {item.mediaType === 'movie'
+                  ? intl.formatMessage(globalMessages.movie)
+                  : item.mediaType === 'music'
+                    ? intl.formatMessage(globalMessages.album)
+                    : intl.formatMessage(globalMessages.tvshow)}
               </div>
-            ) : (
-              <div className="pointer-events-none z-40 self-start rounded-full border border-green-600 bg-green-600/80 shadow-md">
-                <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
-                  {intl.formatMessage(globalMessages.tvshow)}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

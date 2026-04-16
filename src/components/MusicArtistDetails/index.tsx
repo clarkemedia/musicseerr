@@ -7,6 +7,7 @@ import defineMessages from '@app/utils/defineMessages';
 import { MusicalNoteIcon, UserIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useState } from 'react';
 import { useIntl } from 'react-intl';
 import useSWR from 'swr';
 
@@ -18,6 +19,11 @@ const messages = defineMessages('components.MusicArtistDetails', {
   country: 'Country',
   activeyears: 'Active',
   albums: 'Albums',
+  filterAll: 'All',
+  filterAlbums: 'Albums',
+  filterSingles: 'Singles & EPs',
+  filterCompilations: 'Compilations',
+  filterLive: 'Live & Other',
 });
 
 interface ArtistAlbum {
@@ -100,11 +106,32 @@ const MusicArtistDetails = () => {
     );
   }
 
+  const [albumFilter, setAlbumFilter] = useState<string>('albums');
+
   // Sort albums by date descending
-  const sortedAlbums = [...(data.albums ?? [])].sort((a, b) => {
+  const allAlbums = [...(data.albums ?? [])].sort((a, b) => {
     if (!a.firstReleaseDate) return 1;
     if (!b.firstReleaseDate) return -1;
     return b.firstReleaseDate.localeCompare(a.firstReleaseDate);
+  });
+
+  const sortedAlbums = allAlbums.filter((album) => {
+    const type = album.primaryType?.toLowerCase() ?? '';
+    switch (albumFilter) {
+      case 'albums':
+        return type === 'album';
+      case 'singles':
+        return type === 'single' || type === 'ep';
+      case 'compilations':
+        return type === 'compilation';
+      case 'live':
+        return type === 'live' || type === 'broadcast' || type === 'demo' ||
+          type === 'interview' || type === 'remix' || type === 'soundtrack' ||
+          type === 'spokenword' || type === 'audiobook' || type === 'mixtape/street' ||
+          type === 'dj-mix' || (type !== 'album' && type !== 'single' && type !== 'ep' && type !== 'compilation' && type !== '');
+      default:
+        return true;
+    }
   });
 
   return (
@@ -176,12 +203,34 @@ const MusicArtistDetails = () => {
           )}
 
           {/* Discography grid */}
-          {sortedAlbums.length > 0 && (
+          {allAlbums.length > 0 && (
             <div className="mt-8">
               <h2 className="text-xl font-bold text-white">
-                {intl.formatMessage(messages.discography)} (
-                {sortedAlbums.length})
+                {intl.formatMessage(messages.discography)}
               </h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(
+                  [
+                    ['albums', messages.filterAlbums],
+                    ['singles', messages.filterSingles],
+                    ['compilations', messages.filterCompilations],
+                    ['live', messages.filterLive],
+                    ['all', messages.filterAll],
+                  ] as const
+                ).map(([key, msg]) => (
+                  <button
+                    key={key}
+                    onClick={() => setAlbumFilter(key)}
+                    className={`rounded-full px-3 py-1 text-sm font-medium transition ${
+                      albumFilter === key
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    {intl.formatMessage(msg)}
+                  </button>
+                ))}
+              </div>
               <ul className="cards-vertical mt-4">
                 {sortedAlbums.map((album) => (
                   <li key={album.id}>

@@ -26,6 +26,32 @@ musicRoutes.get('/search', async (req, res, next) => {
       results = await mb.searchMulti({ query, limit, offset });
     }
 
+    // Fetch cover art for album results concurrently
+    const albumResults = results.results.filter(
+      (r) => 'title' in r && r.title
+    );
+    const coverArtPromises = albumResults.map(async (result) => {
+      try {
+        const coverUrl = await mb.getCoverArt(result.id);
+        result.posterUrl = coverUrl;
+      } catch {
+        // Cover art not available
+      }
+    });
+    // Also fetch artist images concurrently
+    const artistResults = results.results.filter(
+      (r) => 'name' in r && r.name && !('title' in r && r.title)
+    );
+    const artistImagePromises = artistResults.map(async (result) => {
+      try {
+        const images = await mb.getArtistImages(result.id);
+        result.posterUrl = images.poster;
+      } catch {
+        // Artist images not available
+      }
+    });
+    await Promise.all([...coverArtPromises, ...artistImagePromises]);
+
     // Attach media status info for results that we have in the database
     const musicBrainzIds = results.results.map((r) => r.id);
     const mediaRepository = getRepository(Media);

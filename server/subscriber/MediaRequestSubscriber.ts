@@ -1001,6 +1001,19 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
             media.externalServiceId = lidarrAlbum.id;
             media.externalServiceSlug = lidarrAlbum.foreignAlbumId;
             media.serviceId = lidarrSettings?.id;
+
+            // If the album is already fully available in Lidarr, mark as available
+            if (
+              lidarrAlbum.statistics &&
+              lidarrAlbum.statistics.percentOfTracks === 100
+            ) {
+              media.status = MediaStatus.AVAILABLE;
+
+              const requestRepository = getRepository(MediaRequest);
+              entity.status = MediaRequestStatus.COMPLETED;
+              await requestRepository.save(entity);
+            }
+
             await mediaRepository.save(media);
           })
           .catch(async () => {

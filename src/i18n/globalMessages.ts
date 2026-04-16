@@ -21,6 +21,8 @@ const globalMessages = defineMessages('i18n', {
   collection: 'Collection',
   tvshow: 'Series',
   tvshows: 'Series',
+  album: 'Album',
+  artist: 'Artist',
   cancel: 'Cancel',
   canceling: 'Canceling…',
   approve: 'Approve',

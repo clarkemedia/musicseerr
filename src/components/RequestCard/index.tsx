@@ -97,7 +97,9 @@ const RequestCardError = ({ requestData }: RequestCardErrorProps) => {
                   requestData?.type
                     ? requestData?.type === 'movie'
                       ? globalMessages.movie
-                      : globalMessages.tvshow
+                      : requestData?.type === 'music'
+                        ? globalMessages.album
+                        : globalMessages.tvshow
                     : globalMessages.request
                 ),
               })}
