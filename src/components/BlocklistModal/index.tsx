@@ -84,9 +84,11 @@ const BlocklistModal = ({
         title={`${intl.formatMessage(globalMessages.blocklist)} ${
           type === 'collection'
             ? intl.formatMessage(globalMessages.collection)
-            : isMovie(data)
-              ? intl.formatMessage(globalMessages.movie)
-              : intl.formatMessage(globalMessages.tvshow)
+            : type === 'music'
+              ? intl.formatMessage(globalMessages.album)
+              : isMovie(data)
+                ? intl.formatMessage(globalMessages.movie)
+                : intl.formatMessage(globalMessages.tvshow)
         }`}
         subTitle={`${
           isCollection(data)

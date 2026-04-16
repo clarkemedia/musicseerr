@@ -2,17 +2,22 @@ import type { JellyfinLibraryItem } from '@server/api/jellyfin';
 import JellyfinAPI from '@server/api/jellyfin';
 import type { PlexMetadata } from '@server/api/plexapi';
 import PlexAPI from '@server/api/plexapi';
+import LidarrAPI from '@server/api/servarr/lidarr';
 import RadarrAPI, { type RadarrMovie } from '@server/api/servarr/radarr';
 import type { SonarrSeason, SonarrSeries } from '@server/api/servarr/sonarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
-import { MediaRequestStatus, MediaStatus } from '@server/constants/media';
+import { MediaRequestStatus, MediaStatus, MediaType } from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import MediaRequest from '@server/entity/MediaRequest';
 import type Season from '@server/entity/Season';
 import { User } from '@server/entity/User';
-import type { RadarrSettings, SonarrSettings } from '@server/lib/settings';
+import type {
+  LidarrSettings,
+  RadarrSettings,
+  SonarrSettings,
+} from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { getHostname } from '@server/utils/getHostname';
@@ -28,6 +33,7 @@ class AvailabilitySync {
   private sonarrSeasonsCache: Record<string, SonarrSeason[]>;
   private radarrServers: RadarrSettings[];
   private sonarrServers: SonarrSettings[];
+  private lidarrServers: LidarrSettings[];
 
   async run() {
     const settings = getSettings();
@@ -38,6 +44,7 @@ class AvailabilitySync {
     this.sonarrSeasonsCache = {};
     this.radarrServers = settings.radarr.filter((server) => server.syncEnabled);
     this.sonarrServers = settings.sonarr.filter((server) => server.syncEnabled);
+    this.lidarrServers = settings.lidarr.filter((server) => server.syncEnabled);
 
     try {
       logger.info(`Starting availability sync...`, {
@@ -397,6 +404,14 @@ class AvailabilitySync {
             );
           }
         }
+
+        if (media.mediaType === MediaType.MUSIC) {
+          const existsInLidarr = await this.mediaExistsInLidarr(media);
+
+          if (!existsInLidarr && media.status === MediaStatus.AVAILABLE) {
+            await this.mediaUpdater(media, false, mediaServerType);
+          }
+        }
       }
     } catch (ex) {
       logger.error('Failed to complete availability sync.', {
@@ -677,6 +692,48 @@ class AvailabilitySync {
     }
 
     return existsInRadarr;
+  }
+
+  private async mediaExistsInLidarr(media: Media): Promise<boolean> {
+    let existsInLidarr = false;
+
+    for (const server of this.lidarrServers) {
+      const lidarrAPI = new LidarrAPI({
+        apiKey: server.apiKey,
+        url: LidarrAPI.buildUrl(server, '/api/v1'),
+      });
+
+      try {
+        if (media.externalServiceId) {
+          const album = await lidarrAPI.getAlbum({
+            id: media.externalServiceId,
+          });
+
+          if (
+            album &&
+            album.statistics &&
+            album.statistics.percentOfTracks === 100
+          ) {
+            existsInLidarr = true;
+          }
+        }
+      } catch (ex) {
+        if (!ex.message.includes('404')) {
+          existsInLidarr = true;
+          logger.debug(
+            `Failure retrieving the music album [MusicBrainz ID ${media.musicBrainzId}] from Lidarr.`,
+            {
+              errorMessage: ex.message,
+              label: 'Availability Sync',
+            }
+          );
+        }
+      }
+
+      if (existsInLidarr) break;
+    }
+
+    return existsInLidarr;
   }
 
   private async mediaExistsInSonarr(

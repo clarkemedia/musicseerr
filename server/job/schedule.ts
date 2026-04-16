@@ -9,6 +9,7 @@ import {
   jellyfinRecentScanner,
 } from '@server/lib/scanners/jellyfin';
 import { plexFullScanner, plexRecentScanner } from '@server/lib/scanners/plex';
+import { lidarrScanner } from '@server/lib/scanners/lidarr';
 import { radarrScanner } from '@server/lib/scanners/radarr';
 import { sonarrScanner } from '@server/lib/scanners/sonarr';
 import type { JobId } from '@server/lib/settings';
@@ -175,6 +176,21 @@ export const startJobs = (): void => {
     }),
     running: () => sonarrScanner.status().running,
     cancelFn: () => sonarrScanner.cancel(),
+  });
+
+  // Run full lidarr scan every 24 hours
+  scheduledJobs.push({
+    id: 'lidarr-scan',
+    name: 'Lidarr Scan',
+    type: 'process',
+    interval: 'hours',
+    cronSchedule: jobs['lidarr-scan'].schedule,
+    job: schedule.scheduleJob(jobs['lidarr-scan'].schedule, () => {
+      logger.info('Starting scheduled job: Lidarr Scan', { label: 'Jobs' });
+      lidarrScanner.run();
+    }),
+    running: () => lidarrScanner.status().running,
+    cancelFn: () => lidarrScanner.cancel(),
   });
 
   // Checks if media is still available in plex/sonarr/radarr libs

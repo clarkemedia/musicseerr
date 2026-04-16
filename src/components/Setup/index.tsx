@@ -21,11 +21,11 @@ import { useRouter } from 'next/router';
 import { useCallback, useEffect, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { useToasts } from 'react-toast-notifications';
-import useSWR, { mutate } from 'swr';
+import { mutate } from 'swr';
 import SetupLogin from './SetupLogin';
 
 const messages = defineMessages('components.Setup', {
-  welcome: 'Welcome to Seerr',
+  welcome: 'Welcome to MusicSeerr',
   subtitle: 'Get started by choosing your media server',
   configjellyfin: 'Configure Jellyfin',
   configplex: 'Configure Plex',
@@ -37,7 +37,7 @@ const messages = defineMessages('components.Setup', {
   servertype: 'Choose Server Type',
   signin: 'Sign In',
   configuremediaserver: 'Configure Media Server',
-  configureservices: 'Configure Services',
+  configureservices: 'Configure Lidarr',
   librarieserror:
     'Validation failed. Please toggle the libraries again to continue.',
 });
@@ -100,11 +100,9 @@ const Setup = () => {
     }
   }, [intl, mediaServerType, toasts]);
 
-  const { data: backdrops } = useSWR<string[]>('/api/v1/backdrops', {
-    refreshInterval: 0,
-    refreshWhenHidden: false,
-    revalidateOnFocus: false,
-  });
+  // Backdrops endpoint pulls from TMDB which we don't use for MusicSeerr.
+  // Skip the network call so the setup page doesn't show broken art.
+  const backdrops: string[] | undefined = undefined;
 
   useEffect(() => {
     if (settings.currentSettings.initialized) {

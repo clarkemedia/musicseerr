@@ -590,6 +590,72 @@ class BaseScanner<T> {
     });
   }
 
+  protected async processMusic(
+    musicBrainzId: string,
+    {
+      serviceId,
+      externalServiceId,
+      externalServiceSlug,
+      processing = false,
+      title = 'Unknown Album',
+    }: ProcessOptions = {}
+  ): Promise<void> {
+    const mediaRepository = getRepository(Media);
+
+    await this.asyncLock.dispatch(musicBrainzId, async () => {
+      const existing = await mediaRepository.findOne({
+        where: { musicBrainzId, mediaType: MediaType.MUSIC },
+      });
+
+      if (existing) {
+        let changedExisting = false;
+
+        if (existing.status !== MediaStatus.AVAILABLE) {
+          existing.status = !processing
+            ? MediaStatus.AVAILABLE
+            : existing.status === MediaStatus.DELETED
+              ? MediaStatus.DELETED
+              : MediaStatus.PROCESSING;
+          changedExisting = true;
+        }
+
+        if (
+          serviceId !== undefined &&
+          existing.serviceId !== serviceId
+        ) {
+          existing.serviceId = serviceId;
+          changedExisting = true;
+        }
+
+        if (
+          externalServiceId !== undefined &&
+          existing.externalServiceId !== externalServiceId
+        ) {
+          existing.externalServiceId = externalServiceId;
+          changedExisting = true;
+        }
+
+        if (
+          externalServiceSlug !== undefined &&
+          existing.externalServiceSlug !== externalServiceSlug
+        ) {
+          existing.externalServiceSlug = externalServiceSlug;
+          changedExisting = true;
+        }
+
+        if (changedExisting) {
+          await mediaRepository.save(existing);
+          this.log(
+            `Media for ${title} exists. Changes were detected and the title will be updated.`,
+            'info'
+          );
+        } else {
+          this.log(`Title already exists and no changes detected for ${title}`);
+        }
+      }
+    });
+  }
+
   /**
    * Call startRun from child class whenever a run is starting to
    * ensure required values are set

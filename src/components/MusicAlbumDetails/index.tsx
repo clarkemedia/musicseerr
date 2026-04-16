@@ -25,6 +25,14 @@ const messages = defineMessages('components.MusicAlbumDetails', {
   openinlidarr: 'Open Album in Lidarr',
 });
 
+interface AlbumTrack {
+  id: string;
+  number: string;
+  title: string;
+  length: number | null;
+  position: number;
+}
+
 interface AlbumData {
   id: string;
   title: string;
@@ -47,6 +55,15 @@ interface AlbumData {
     trackCount: number;
     format: string;
   }[];
+  tracks: AlbumTrack[];
+  bestRelease: {
+    id: string;
+    title: string;
+    date: string;
+    country: string;
+    format: string;
+    trackCount: number;
+  } | null;
   artist?: {
     id: string;
     name: string;
@@ -63,6 +80,14 @@ interface AlbumData {
     serviceUrl?: string;
   };
 }
+
+const formatTrackLength = (ms: number | null): string => {
+  if (!ms || ms <= 0) return '';
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
 
 const MusicAlbumDetails = () => {
   const router = useRouter();
@@ -120,8 +145,10 @@ const MusicAlbumDetails = () => {
     );
   }
 
-  const bestRelease = data.releases?.[0];
-  const trackCount = bestRelease?.trackCount ?? 0;
+  const bestRelease = data.bestRelease ?? data.releases?.[0] ?? null;
+  const trackCount =
+    data.bestRelease?.trackCount ?? data.releases?.[0]?.trackCount ?? 0;
+  const tracks = data.tracks ?? [];
 
   return (
     <div className="media-page" style={{ height: 493 }}>
@@ -258,15 +285,37 @@ const MusicAlbumDetails = () => {
               <h2 className="text-xl font-bold text-white">
                 {intl.formatMessage(messages.tracks)} ({trackCount})
               </h2>
-              <div className="mt-2 text-sm text-gray-400">
-                {bestRelease.format && (
-                  <span>
-                    {bestRelease.format}
-                    {bestRelease.country && ` · ${bestRelease.country}`}
-                    {bestRelease.date && ` · ${bestRelease.date}`}
-                  </span>
-                )}
-              </div>
+              {bestRelease && (
+                <div className="mt-2 text-sm text-gray-400">
+                  {bestRelease.format && <span>{bestRelease.format}</span>}
+                  {bestRelease.country && <span> · {bestRelease.country}</span>}
+                  {bestRelease.date && <span> · {bestRelease.date}</span>}
+                </div>
+              )}
+              {tracks.length > 0 && (
+                <div className="mt-3 overflow-hidden rounded-lg bg-gray-800">
+                  {tracks.map((track) => (
+                    <div
+                      key={track.id}
+                      className="flex items-center justify-between border-b border-gray-700 px-4 py-2 last:border-b-0"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="w-6 flex-shrink-0 text-right text-sm text-gray-500">
+                          {track.number || track.position}
+                        </span>
+                        <span className="truncate text-white">
+                          {track.title}
+                        </span>
+                      </div>
+                      {track.length && (
+                        <span className="ml-4 flex-shrink-0 text-sm text-gray-400">
+                          {formatTrackLength(track.length)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

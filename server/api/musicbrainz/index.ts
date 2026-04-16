@@ -8,14 +8,17 @@ import type {
   MusicArtistResult,
   MusicBrainzArtist,
   MusicBrainzArtistCredit,
+  MusicBrainzRelease,
   MusicBrainzReleaseGroup,
   MusicBrainzSearchResponse,
+  MusicReleaseDetail,
   MusicSearchResults,
 } from './interfaces';
 
 const MUSICBRAINZ_API_URL = 'https://musicbrainz.org/ws/2';
 const COVERART_API_URL = 'https://coverartarchive.org';
 const FANART_API_URL = 'https://webservice.fanart.tv/v3/music';
+const LASTFM_API_URL = 'https://ws.audioscrobbler.com/2.0/';
 
 // MusicBrainz rate limit: 1 request per second
 const REQUEST_INTERVAL_MS = 1100;
@@ -23,8 +26,9 @@ const REQUEST_INTERVAL_MS = 1100;
 class MusicBrainz extends ExternalAPI {
   private lastRequestTime = 0;
   private fanartApiKey: string | null = null;
+  private lastfmApiKey: string | null = null;
 
-  constructor(fanartApiKey?: string) {
+  constructor(fanartApiKey?: string, lastfmApiKey?: string) {
     super(
       MUSICBRAINZ_API_URL,
       {},
@@ -40,6 +44,7 @@ class MusicBrainz extends ExternalAPI {
     );
 
     this.fanartApiKey = fanartApiKey ?? null;
+    this.lastfmApiKey = lastfmApiKey ?? null;
   }
 
   private async rateLimitedRequest<T>(
@@ -316,6 +321,91 @@ class MusicBrainz extends ExternalAPI {
       };
     } catch {
       return { poster: null, fanart: null };
+    }
+  }
+
+  public async getArtistBio(artistMbId: string): Promise<string | null> {
+    if (!this.lastfmApiKey) {
+      return null;
+    }
+
+    try {
+      const response = await this.axios.get<{
+        artist?: {
+          bio?: { content?: string; summary?: string };
+        };
+      }>(LASTFM_API_URL, {
+        params: {
+          method: 'artist.getinfo',
+          mbid: artistMbId,
+          api_key: this.lastfmApiKey,
+          format: 'json',
+        },
+        timeout: 5000,
+      });
+
+      const raw =
+        response.data.artist?.bio?.content ??
+        response.data.artist?.bio?.summary ??
+        '';
+      // Strip the "Read more on Last.fm" trailing link block, then strip any
+      // remaining HTML tags so the bio renders safely as plain text.
+      const cleaned = raw
+        .replace(/<a[^>]*>Read more on Last\.fm[^<]*<\/a>\.?\s*$/i, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+      return cleaned || null;
+    } catch {
+      return null;
+    }
+  }
+
+  public async getRelease(releaseId: string): Promise<MusicReleaseDetail | null> {
+    try {
+      const data = await this.rateLimitedRequest<MusicBrainzRelease>(
+        `/release/${releaseId}`,
+        {
+          inc: 'recordings+media',
+        }
+      );
+
+      const tracks = (data.media ?? [])
+        .flatMap((medium) =>
+          (medium.tracks ?? []).map((t) => ({
+            id: t.id,
+            number: t.number,
+            title: t.title ?? t.recording?.title ?? '',
+            length: t.length ?? t.recording?.length ?? null,
+            position: t.position,
+          }))
+        )
+        .sort((a, b) => a.position - b.position);
+
+      const trackCount = (data.media ?? []).reduce(
+        (sum, m) => sum + (m['track-count'] ?? m.trackCount ?? 0),
+        0
+      );
+
+      return {
+        id: data.id,
+        title: data.title,
+        status: data.status ?? '',
+        date: data.date ?? '',
+        country: data.country ?? '',
+        format: data.media?.[0]?.format ?? '',
+        trackCount,
+        tracks,
+      };
+    } catch (e) {
+      logger.error('Failed to get release from MusicBrainz', {
+        label: 'MusicBrainz',
+        errorMessage: e.message,
+        releaseId,
+      });
+      return null;
     }
   }
 
