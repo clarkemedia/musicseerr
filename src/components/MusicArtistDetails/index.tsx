@@ -195,7 +195,15 @@ const MusicArtistDetails = () => {
       <div className="media-overview">
         <div className="media-overview-left">
           {data.overview ? (
-            <p>{data.overview}</p>
+            <div className="space-y-3">
+              {data.overview
+                .split(/\n{2,}/)
+                .map((paragraph, i) => (
+                  <p key={i} className="whitespace-pre-line">
+                    {paragraph.trim()}
+                  </p>
+                ))}
+            </div>
           ) : (
             <p className="text-gray-400">
               {intl.formatMessage(messages.overviewunavailable)}

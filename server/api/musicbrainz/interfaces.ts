@@ -201,6 +201,25 @@ export interface MusicAlbumResult {
   }[];
 }
 
+export interface MusicTrack {
+  id: string;
+  number: string;
+  title: string;
+  length: number | null;
+  position: number;
+}
+
+export interface MusicReleaseDetail {
+  id: string;
+  title: string;
+  status: string;
+  date: string;
+  country: string;
+  format: string;
+  trackCount: number;
+  tracks: MusicTrack[];
+}
+
 export interface MusicSearchResults {
   page: number;
   totalPages: number;

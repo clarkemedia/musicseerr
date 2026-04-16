@@ -1,6 +1,6 @@
 {
-  "name": "Seerr",
-  "short_name": "Seerr",
+  "name": "MusicSeerr",
+  "short_name": "MusicSeerr",
   "start_url": "./",
   "icons": [
     {
@@ -28,7 +28,7 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#1f2937",
+  "theme_color": "#1DB954",
   "background_color": "#1f2937",
   "display": "standalone",
   "shortcuts": [
