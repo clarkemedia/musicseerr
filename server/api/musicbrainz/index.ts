@@ -428,6 +428,7 @@ class MusicBrainz extends ExternalAPI {
 
     return {
       id: artist.id,
+      score: artist.score,
       name: artist.name,
       sortName: artist['sort-name'] ?? artist.sortName ?? artist.name,
       disambiguation: artist.disambiguation ?? '',
@@ -475,6 +476,7 @@ class MusicBrainz extends ExternalAPI {
 
     return {
       id: rg.id,
+      score: rg.score,
       title: rg.title,
       primaryType: rg['primary-type'] ?? rg.primaryType ?? '',
       secondaryTypes: rg['secondary-types'] ?? rg.secondaryTypes ?? [],

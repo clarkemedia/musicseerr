@@ -1,5 +1,6 @@
 export interface MusicBrainzArtist {
   id: string;
+  score?: number;
   name: string;
   sortName: string;
   'sort-name'?: string;
@@ -27,6 +28,7 @@ export interface MusicBrainzArtist {
 
 export interface MusicBrainzReleaseGroup {
   id: string;
+  score?: number;
   title: string;
   primaryType: string;
   'primary-type'?: string;
@@ -161,6 +163,7 @@ export interface CoverArtImage {
 // Normalised types for internal use (camelCase)
 export interface MusicArtistResult {
   id: string;
+  score?: number;
   name: string;
   sortName: string;
   disambiguation: string;
@@ -179,6 +182,7 @@ export interface MusicArtistResult {
 
 export interface MusicAlbumResult {
   id: string;
+  score?: number;
   title: string;
   primaryType: string;
   secondaryTypes: string[];

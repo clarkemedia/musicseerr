@@ -15,6 +15,8 @@ const messages = defineMessages('components.MusicSearch', {
   searchplaceholder: 'Search for artists or albums...',
   noresults: 'No results found.',
   searchresults: 'Search Results',
+  filterLive: 'Live',
+  filterBootlegs: 'Bootlegs',
 });
 
 interface MusicSearchResult {
@@ -50,6 +52,8 @@ const MusicSearch = () => {
     (router.query.query as string) ?? ''
   );
   const [query, setQuery] = useState((router.query.query as string) ?? '');
+  const [includeLive, setIncludeLive] = useState(false);
+  const [includeBootlegs, setIncludeBootlegs] = useState(false);
 
   useEffect(() => {
     if (router.query.query) {
@@ -58,9 +62,11 @@ const MusicSearch = () => {
     }
   }, [router.query.query]);
 
-  const { data, error, isValidating } = useSWR<MusicSearchResponse>(
-    query ? `/api/v1/music/search?query=${encodeURIComponent(query)}` : null
-  );
+  const searchUrl = query
+    ? `/api/v1/music/search?query=${encodeURIComponent(query)}&includeLive=${includeLive}&includeBootlegs=${includeBootlegs}`
+    : null;
+
+  const { data, error, isValidating } = useSWR<MusicSearchResponse>(searchUrl);
 
   const handleSearch = useCallback(
     (e: React.FormEvent) => {
@@ -86,7 +92,7 @@ const MusicSearch = () => {
         <Header>{intl.formatMessage(messages.musicsearch)}</Header>
       </div>
       <form onSubmit={handleSearch} className="mb-8">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
             <input
@@ -98,6 +104,31 @@ const MusicSearch = () => {
               autoFocus
             />
           </div>
+          {/* Filter toggles */}
+          <button
+            type="button"
+            onClick={() => setIncludeLive((v) => !v)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              includeLive
+                ? 'border-green-500 bg-green-600/20 text-green-400'
+                : 'border-gray-600 bg-gray-800 text-gray-400 hover:border-gray-500 hover:text-gray-300'
+            }`}
+            aria-pressed={includeLive}
+          >
+            {intl.formatMessage(messages.filterLive)}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIncludeBootlegs((v) => !v)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              includeBootlegs
+                ? 'border-green-500 bg-green-600/20 text-green-400'
+                : 'border-gray-600 bg-gray-800 text-gray-400 hover:border-gray-500 hover:text-gray-300'
+            }`}
+            aria-pressed={includeBootlegs}
+          >
+            {intl.formatMessage(messages.filterBootlegs)}
+          </button>
           <button
             type="submit"
             className="rounded-lg bg-green-600 px-6 py-3 font-medium text-white transition hover:bg-green-500"

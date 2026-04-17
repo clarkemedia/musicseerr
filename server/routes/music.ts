@@ -3,6 +3,7 @@ import { MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import logger from '@server/logger';
+import axios from 'axios';
 import { Router } from 'express';
 
 const musicRoutes = Router();
@@ -13,6 +14,65 @@ const createMusicBrainz = () =>
     process.env.LASTFM_API_KEY || undefined
   );
 
+// ---------------------------------------------------------------------------
+// Discover popular — in-memory cache (6 hours)
+// ---------------------------------------------------------------------------
+
+interface DiscoverPopularArtist {
+  mbid: string;
+  name: string;
+  imageUrl: string;
+  fanCount: number;
+}
+
+interface DiscoverPopularAlbum {
+  mbid: string;
+  title: string;
+  artistName: string;
+  imageUrl: string;
+  releaseDate: string;
+}
+
+interface DiscoverPopularTrack {
+  title: string;
+  artistName: string;
+  artistImageUrl: string;
+  albumTitle: string;
+  albumImageUrl: string;
+  duration: number;
+}
+
+interface DiscoverPopularResult {
+  artists: DiscoverPopularArtist[];
+  albums: DiscoverPopularAlbum[];
+  tracks: DiscoverPopularTrack[];
+}
+
+let popularCache: { data: DiscoverPopularResult; fetchedAt: number } | null = null;
+const POPULAR_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+// Run up to `concurrency` tasks at a time, waiting `delayMs` between batches.
+async function rateLimitedSettled<T>(
+  items: (() => Promise<T>)[],
+  concurrency: number,
+  delayMs: number
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const batchResults = await Promise.allSettled(batch.map((fn) => fn()));
+    results.push(...batchResults);
+    if (i + concurrency < items.length) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// GET /search
+// ---------------------------------------------------------------------------
+
 musicRoutes.get('/search', async (req, res, next) => {
   try {
     const mb = createMusicBrainz();
@@ -21,6 +81,10 @@ musicRoutes.get('/search', async (req, res, next) => {
     const limit = 25;
     const offset = (page - 1) * limit;
     const type = req.query.type as string | undefined;
+
+    // Filter toggles (default off)
+    const includeLive = req.query.includeLive === 'true';
+    const includeBootlegs = req.query.includeBootlegs === 'true';
 
     let results;
 
@@ -32,11 +96,67 @@ musicRoutes.get('/search', async (req, res, next) => {
       results = await mb.searchMulti({ query, limit, offset });
     }
 
-    // Fetch cover art for album results concurrently
-    const albumResults = results.results.filter(
-      (r) => 'title' in r && r.title
+    // ------------------------------------------------------------------
+    // Filtering — only applies to album results (release groups)
+    // ------------------------------------------------------------------
+    const filtered = results.results.filter((result) => {
+      // Artists have `name` but no `title`; skip filtering them
+      if (!('title' in result)) return true;
+
+      const secondaryTypes = (result.secondaryTypes ?? []).map((s) => s.toLowerCase());
+      const disambig = (result.disambiguation ?? '').toLowerCase();
+      const titleLower = (result.title ?? '').toLowerCase();
+
+      // Always remove Interview / Spokenword
+      if (secondaryTypes.includes('interview') || secondaryTypes.includes('spokenword')) {
+        return false;
+      }
+
+      // Remove live releases unless opted in
+      if (!includeLive) {
+        if (secondaryTypes.includes('live')) return false;
+        if (result.primaryType === 'Broadcast') return false;
+      }
+
+      // Remove bootlegs unless opted in
+      if (!includeBootlegs) {
+        if (secondaryTypes.includes('bootleg')) return false;
+        if (disambig.includes('bootleg') || titleLower.includes('bootleg')) return false;
+      }
+
+      return true;
+    });
+
+    // ------------------------------------------------------------------
+    // Smart result ordering
+    // ------------------------------------------------------------------
+    const artistResults = filtered.filter((r) => 'name' in r && !('title' in r));
+    const albumResultsFiltered = filtered.filter((r) => 'title' in r);
+
+    // Determine ordering: if any artist has a high MusicBrainz score (>=85),
+    // put artists first (query looks like an artist name).
+    const topArtistScore = artistResults.reduce((max, r) => {
+      const s = r.score ?? 0;
+      return s > max ? s : max;
+    }, 0);
+
+    // Sort albums by score descending regardless of ordering
+    const sortedAlbums = [...albumResultsFiltered].sort(
+      (a, b) => (b.score ?? 0) - (a.score ?? 0)
     );
-    const coverArtPromises = albumResults.map(async (result) => {
+
+    let orderedResults: typeof filtered;
+    if (topArtistScore >= 85) {
+      // Query looks like an artist — artists first, then albums by score desc
+      orderedResults = [...artistResults, ...sortedAlbums];
+    } else {
+      // Query looks like an album/song — albums first by score, then artists
+      orderedResults = [...sortedAlbums, ...artistResults];
+    }
+
+    // Fetch cover art for album results concurrently
+    const albumsToFetch = orderedResults.filter((r) => 'title' in r && r.title);
+    const coverArtPromises = albumsToFetch.map(async (result) => {
       try {
         const coverUrl = await mb.getCoverArt(result.id);
         result.posterUrl = coverUrl;
@@ -45,10 +165,10 @@ musicRoutes.get('/search', async (req, res, next) => {
       }
     });
     // Also fetch artist images concurrently
-    const artistResults = results.results.filter(
+    const artistsToFetch = orderedResults.filter(
       (r) => 'name' in r && r.name && !('title' in r && r.title)
     );
-    const artistImagePromises = artistResults.map(async (result) => {
+    const artistImagePromises = artistsToFetch.map(async (result) => {
       try {
         const images = await mb.getArtistImages(result.id);
         result.posterUrl = images.poster;
@@ -59,7 +179,7 @@ musicRoutes.get('/search', async (req, res, next) => {
     await Promise.all([...coverArtPromises, ...artistImagePromises]);
 
     // Attach media status info for results that we have in the database
-    const musicBrainzIds = results.results.map((r) => r.id);
+    const musicBrainzIds = orderedResults.map((r) => r.id);
     const mediaRepository = getRepository(Media);
     const mediaItems = await mediaRepository.find({
       where: musicBrainzIds.map((mbId: string) => ({
@@ -72,7 +192,7 @@ musicRoutes.get('/search', async (req, res, next) => {
       mediaItems.map((m: Media) => [m.musicBrainzId, m])
     );
 
-    const resultsWithStatus = results.results.map((result) => {
+    const resultsWithStatus = orderedResults.map((result) => {
       const media = mediaMap.get(result.id);
       return {
         ...result,
@@ -104,6 +224,139 @@ musicRoutes.get('/search', async (req, res, next) => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// GET /discover/popular
+// ---------------------------------------------------------------------------
+
+musicRoutes.get('/discover/popular', async (req, res, next) => {
+  try {
+    // Cache hit
+    if (popularCache && Date.now() - popularCache.fetchedAt < POPULAR_CACHE_TTL) {
+      return res.status(200).json(popularCache.data);
+    }
+
+    // Fetch from Deezer (no auth required)
+    const [artistsRes, albumsRes, tracksRes] = await Promise.allSettled([
+      axios.get<{ data: DeezerArtist[] }>('https://api.deezer.com/chart/0/artists?limit=20'),
+      axios.get<{ data: DeezerAlbum[] }>('https://api.deezer.com/chart/0/albums?limit=20'),
+      axios.get<{ data: DeezerTrack[] }>('https://api.deezer.com/chart/0/tracks?limit=20'),
+    ]);
+
+    const deezerArtists: DeezerArtist[] =
+      artistsRes.status === 'fulfilled' ? artistsRes.value.data.data ?? [] : [];
+    const deezerAlbums: DeezerAlbum[] =
+      albumsRes.status === 'fulfilled' ? albumsRes.value.data.data ?? [] : [];
+    const deezerTracks: DeezerTrack[] =
+      tracksRes.status === 'fulfilled' ? tracksRes.value.data.data ?? [] : [];
+
+    const mb = createMusicBrainz();
+
+    // Look up MBIDs for artists
+    const artistTasks = deezerArtists.map(
+      (da) => async (): Promise<DiscoverPopularArtist> => {
+        const searchResult = await mb.searchArtists({ query: da.name, limit: 1, offset: 0 });
+        const top = searchResult.results[0];
+        if (!top || !('name' in top)) throw new Error('No artist match');
+        return {
+          mbid: top.id,
+          name: da.name,
+          imageUrl: da.picture_xl ?? da.picture ?? '',
+          fanCount: da.nb_fan ?? 0,
+        };
+      }
+    );
+
+    // Look up MBIDs for albums
+    const albumTasks = deezerAlbums.map(
+      (da) => async (): Promise<DiscoverPopularAlbum> => {
+        const albumQuery = `${da.title} artist:${da.artist?.name ?? ''}`;
+        const searchResult = await mb.searchAlbums({ query: albumQuery, limit: 1, offset: 0 });
+        const top = searchResult.results[0];
+        if (!top || !('title' in top)) throw new Error('No album match');
+        return {
+          mbid: top.id,
+          title: da.title,
+          artistName: da.artist?.name ?? '',
+          imageUrl: da.cover_xl ?? da.cover ?? '',
+          releaseDate: da.release_date ?? '',
+        };
+      }
+    );
+
+    const [artistSettled, albumSettled] = await Promise.all([
+      rateLimitedSettled(artistTasks, 3, 350),
+      rateLimitedSettled(albumTasks, 3, 350),
+    ]);
+
+    const artists: DiscoverPopularArtist[] = artistSettled
+      .filter((r): r is PromiseFulfilledResult<DiscoverPopularArtist> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    const albums: DiscoverPopularAlbum[] = albumSettled
+      .filter((r): r is PromiseFulfilledResult<DiscoverPopularAlbum> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    // Tracks — no MBID lookup needed
+    const tracks: DiscoverPopularTrack[] = deezerTracks.slice(0, 20).map((dt) => ({
+      title: dt.title,
+      artistName: dt.artist?.name ?? '',
+      artistImageUrl: dt.artist?.picture_medium ?? dt.artist?.picture ?? '',
+      albumTitle: dt.album?.title ?? '',
+      albumImageUrl: dt.album?.cover_medium ?? dt.album?.cover ?? '',
+      duration: dt.duration ?? 0,
+    }));
+
+    const data: DiscoverPopularResult = { artists, albums, tracks };
+
+    // Store in cache
+    popularCache = { data, fetchedAt: Date.now() };
+
+    return res.status(200).json(data);
+  } catch (e) {
+    logger.error('Failed to load discover popular', {
+      label: 'Music API',
+      errorMessage: e.message,
+    });
+    return next({
+      status: 500,
+      message: 'Unable to retrieve popular music.',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Deezer response types (local — not exported)
+// ---------------------------------------------------------------------------
+
+interface DeezerArtist {
+  id: number;
+  name: string;
+  picture?: string;
+  picture_xl?: string;
+  nb_fan?: number;
+}
+
+interface DeezerAlbum {
+  id: number;
+  title: string;
+  cover?: string;
+  cover_xl?: string;
+  release_date?: string;
+  artist?: { id: number; name: string };
+}
+
+interface DeezerTrack {
+  id: number;
+  title: string;
+  duration?: number;
+  artist?: { id: number; name: string; picture?: string; picture_medium?: string };
+  album?: { id: number; title: string; cover?: string; cover_medium?: string };
+}
+
+// ---------------------------------------------------------------------------
+// GET /artist/:id
+// ---------------------------------------------------------------------------
 
 musicRoutes.get('/artist/:id', async (req, res, next) => {
   try {
@@ -176,6 +429,10 @@ musicRoutes.get('/artist/:id', async (req, res, next) => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// GET /album/:id
+// ---------------------------------------------------------------------------
 
 musicRoutes.get('/album/:id', async (req, res, next) => {
   try {
@@ -256,6 +513,10 @@ musicRoutes.get('/album/:id', async (req, res, next) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// GET /discover/recently-added
+// ---------------------------------------------------------------------------
+
 musicRoutes.get('/discover/recently-added', async (req, res, next) => {
   try {
     const mediaRepository = getRepository(Media);
@@ -317,6 +578,10 @@ musicRoutes.get('/discover/recently-added', async (req, res, next) => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// GET /artist/:id/albums
+// ---------------------------------------------------------------------------
 
 musicRoutes.get('/artist/:id/albums', async (req, res, next) => {
   try {
