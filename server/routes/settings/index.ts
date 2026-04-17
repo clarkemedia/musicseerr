@@ -40,6 +40,7 @@ import path from 'path';
 import semver from 'semver';
 import { URL } from 'url';
 import metadataRoutes from './metadata';
+import navidromeRoutes from './navidrome';
 import notificationRoutes from './notifications';
 import radarrRoutes from './radarr';
 import sonarrRoutes from './sonarr';
@@ -51,6 +52,7 @@ settingsRoutes.use('/notifications', notificationRoutes);
 settingsRoutes.use('/radarr', radarrRoutes);
 settingsRoutes.use('/sonarr', sonarrRoutes);
 settingsRoutes.use('/lidarr', lidarrRoutes);
+settingsRoutes.use('/navidrome', navidromeRoutes);
 settingsRoutes.use('/discover', discoverSettingRoutes);
 settingsRoutes.use('/metadatas', metadataRoutes);
 

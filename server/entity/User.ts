@@ -101,6 +101,12 @@ export class User {
   @Column({ type: 'varchar', nullable: true, select: false })
   public plexToken?: string | null;
 
+  @Column({ nullable: true })
+  public navidromeUserId?: string | null;
+
+  @Column({ nullable: true })
+  public navidromeUsername?: string | null;
+
   @Column({ type: 'integer', default: 0 })
   public permissions = 0;
 
@@ -264,7 +270,11 @@ export class User {
   @AfterLoad()
   public setDisplayName(): void {
     this.displayName =
-      this.username || this.plexUsername || this.jellyfinUsername || this.email;
+      this.username ||
+      this.plexUsername ||
+      this.jellyfinUsername ||
+      this.navidromeUsername ||
+      this.email;
   }
 
   public async getQuota(): Promise<QuotaResponse> {

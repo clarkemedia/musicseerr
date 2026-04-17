@@ -7,6 +7,7 @@ import PageTitle from '@app/components/Common/PageTitle';
 import LanguagePicker from '@app/components/Layout/LanguagePicker';
 import JellyfinLogin from '@app/components/Login/JellyfinLogin';
 import LocalLogin from '@app/components/Login/LocalLogin';
+import NavidromeLogin from '@app/components/Login/NavidromeLogin';
 import PlexLoginButton from '@app/components/Login/PlexLoginButton';
 import useSettings from '@app/hooks/useSettings';
 import { useUser } from '@app/hooks/useUser';
@@ -88,7 +89,9 @@ const Login = () => {
         ? 'Jellyfin'
         : settings.currentSettings.mediaServerType === MediaServerType.EMBY
           ? 'Emby'
-          : undefined;
+          : settings.currentSettings.mediaServerType === MediaServerType.NAVIDROME
+            ? 'Navidrome'
+            : undefined;
 
   const MediaServerLogo =
     settings.currentSettings.mediaServerType === MediaServerType.PLEX
@@ -102,12 +105,16 @@ const Login = () => {
   const isJellyfin =
     settings.currentSettings.mediaServerType === MediaServerType.JELLYFIN ||
     settings.currentSettings.mediaServerType === MediaServerType.EMBY;
+
+  const isNavidrome =
+    settings.currentSettings.mediaServerType === MediaServerType.NAVIDROME;
   const mediaServerLoginRef = useRef<HTMLDivElement>(null);
   const localLoginRef = useRef<HTMLDivElement>(null);
   const loginRef = mediaServerLogin ? mediaServerLoginRef : localLoginRef;
 
   const loginFormVisible =
     (isJellyfin && settings.currentSettings.mediaServerLogin) ||
+    (isNavidrome && settings.currentSettings.mediaServerLogin) ||
     settings.currentSettings.localLogin;
   const additionalLoginOptions = [
     settings.currentSettings.mediaServerLogin &&
@@ -142,7 +149,7 @@ const Login = () => {
             className="flex-1 bg-transparent"
             onClick={() => setMediaServerLogin(true)}
           >
-            <MediaServerLogo />
+            {MediaServerLogo ? <MediaServerLogo /> : null}
             <span>{mediaServerName}</span>
           </Button>
         ))
@@ -215,9 +222,13 @@ const Login = () => {
                   }}
                 >
                   <div ref={loginRef} className="button-container">
-                    {isJellyfin &&
+                    {isNavidrome &&
                     (mediaServerLogin ||
                       !settings.currentSettings.localLogin) ? (
+                      <NavidromeLogin revalidate={revalidate} />
+                    ) : isJellyfin &&
+                      (mediaServerLogin ||
+                        !settings.currentSettings.localLogin) ? (
                       <JellyfinLogin
                         serverType={settings.currentSettings.mediaServerType}
                         revalidate={revalidate}

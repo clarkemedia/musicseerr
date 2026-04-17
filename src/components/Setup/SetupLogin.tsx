@@ -1,6 +1,7 @@
 import Button from '@app/components/Common/Button';
 import PlexLoginButton from '@app/components/Login/PlexLoginButton';
 import JellyfinSetup from '@app/components/Setup/JellyfinSetup';
+import NavidromeSetup from '@app/components/Setup/NavidromeSetup';
 import { useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
 import { MediaServerType } from '@server/constants/server';
@@ -15,6 +16,7 @@ const messages = defineMessages('components.Setup', {
   signinWithJellyfin: 'Enter your Jellyfin details',
   signinWithEmby: 'Enter your Emby details',
   signinWithPlex: 'Enter your Plex details',
+  signinWithNavidrome: 'Enter your Navidrome details',
   back: 'Go back',
 });
 
@@ -75,6 +77,8 @@ const SetupLogin: React.FC<LoginWithMediaServerProps> = ({
           <FormattedMessage {...messages.signinWithJellyfin} />
         ) : serverType === MediaServerType.EMBY ? (
           <FormattedMessage {...messages.signinWithEmby} />
+        ) : serverType === MediaServerType.NAVIDROME ? (
+          <FormattedMessage {...messages.signinWithNavidrome} />
         ) : (
           <FormattedMessage {...messages.signinWithPlex} />
         )}
@@ -110,6 +114,9 @@ const SetupLogin: React.FC<LoginWithMediaServerProps> = ({
           serverType={serverType}
           onCancel={onCancel}
         />
+      )}
+      {serverType === MediaServerType.NAVIDROME && (
+        <NavidromeSetup revalidate={revalidate} onCancel={onCancel} />
       )}
     </div>
   );

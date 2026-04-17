@@ -1,4 +1,5 @@
 import JellyfinAPI from '@server/api/jellyfin';
+import NavidromeAPI from '@server/api/navidrome';
 import PlexTvAPI from '@server/api/plextv';
 import { ApiErrorCode } from '@server/constants/error';
 import { MediaServerType, ServerType } from '@server/constants/server';
@@ -589,6 +590,198 @@ authRoutes.post('/jellyfin', async (req, res, next) => {
           status: 500,
           message: 'Something went wrong.',
         });
+    }
+  }
+});
+
+authRoutes.post('/navidrome', async (req, res, next) => {
+  const settings = getSettings();
+  const userRepository = getRepository(User);
+  const body = req.body as {
+    username?: string;
+    password?: string;
+    hostname?: string;
+    email?: string;
+  };
+
+  if (
+    settings.main.mediaServerType !== MediaServerType.NOT_CONFIGURED &&
+    settings.main.mediaServerType !== MediaServerType.NAVIDROME
+  ) {
+    return res.status(500).json({ error: 'Navidrome login is disabled' });
+  }
+
+  if (!body.username) {
+    return res.status(500).json({ error: 'You must provide a username' });
+  }
+
+  if (!body.password) {
+    return res.status(500).json({ error: 'You must provide a password' });
+  }
+
+  // Determine base URL: use saved settings or provided hostname
+  const baseUrl =
+    settings.navidrome.url !== ''
+      ? settings.navidrome.url
+      : body.hostname ?? '';
+
+  if (!baseUrl) {
+    return res.status(500).json({ error: 'No Navidrome URL provided.' });
+  }
+
+  try {
+    const navidromeApi = new NavidromeAPI(baseUrl);
+    const account = await navidromeApi.login(body.username, body.password);
+
+    // Look up existing user by navidromeUserId
+    let user = await userRepository.findOne({
+      where: { navidromeUserId: account.id },
+    });
+
+    const missingAdminUser = !user && !(await userRepository.count());
+
+    if (
+      missingAdminUser ||
+      settings.main.mediaServerType === MediaServerType.NOT_CONFIGURED
+    ) {
+      // First-time setup: require admin role on Navidrome
+      if (!account.adminRole) {
+        throw new ApiError(403, ApiErrorCode.NotAdmin);
+      }
+
+      if (missingAdminUser) {
+        logger.info(
+          'Sign-in attempt from Navidrome admin; creating initial admin user for Seerr',
+          {
+            label: 'API',
+            ip: req.ip,
+            navidromeUsername: account.username,
+          }
+        );
+
+        user = new User({
+          id: 1,
+          email: body.email || account.email || account.username,
+          navidromeUsername: account.username,
+          navidromeUserId: account.id,
+          permissions: Permission.ADMIN,
+          avatar: '',
+          userType: UserType.NAVIDROME,
+        });
+
+        await userRepository.save(user);
+      } else {
+        logger.info(
+          'Sign-in attempt from Navidrome admin; updating existing admin user for Seerr',
+          {
+            label: 'API',
+            ip: req.ip,
+            navidromeUsername: account.username,
+          }
+        );
+
+        user = await userRepository.findOne({ where: { id: 1 } });
+        if (!user) {
+          throw new Error('Unable to find admin user to update');
+        }
+        user.email = body.email || account.email || account.username;
+        user.navidromeUsername = account.username;
+        user.navidromeUserId = account.id;
+        user.permissions = Permission.ADMIN;
+        user.userType = UserType.NAVIDROME;
+
+        await userRepository.save(user);
+      }
+
+      settings.main.mediaServerType = MediaServerType.NAVIDROME;
+      settings.navidrome.url = baseUrl;
+      settings.navidrome.name = 'Navidrome';
+      await settings.save();
+      startJobs();
+    } else if (user) {
+      // Existing user: update username
+      logger.info(
+        `Found matching Navidrome user; updating user with Navidrome data`,
+        {
+          label: 'API',
+          ip: req.ip,
+          navidromeUsername: account.username,
+        }
+      );
+      user.navidromeUsername = account.username;
+      await userRepository.save(user);
+    } else if (!settings.main.newPlexLogin) {
+      logger.warn(
+        'Failed sign-in attempt by unimported Navidrome user',
+        {
+          label: 'API',
+          ip: req.ip,
+          navidromeUserId: account.id,
+          navidromeUsername: account.username,
+        }
+      );
+      return next({ status: 403, message: 'Access denied.' });
+    } else {
+      logger.info(
+        'Sign-in attempt from Navidrome user; creating new Seerr user',
+        {
+          label: 'API',
+          ip: req.ip,
+          navidromeUsername: account.username,
+        }
+      );
+
+      user = new User({
+        email: body.email || account.email || account.username,
+        navidromeUsername: account.username,
+        navidromeUserId: account.id,
+        permissions: settings.main.defaultPermissions,
+        avatar: '',
+        userType: UserType.NAVIDROME,
+      });
+
+      await userRepository.save(user);
+    }
+
+    if (req.session) {
+      req.session.userId = user?.id;
+    }
+
+    return res.status(200).json(user?.filter() ?? {});
+  } catch (e) {
+    switch (e.errorCode) {
+      case ApiErrorCode.InvalidUrl:
+        logger.error('The provided Navidrome URL is invalid or not reachable.', {
+          label: 'Auth',
+          error: e.errorCode,
+          status: e.statusCode,
+          url: baseUrl,
+        });
+        return next({ status: e.statusCode, message: e.errorCode });
+
+      case ApiErrorCode.InvalidCredentials:
+        logger.warn(
+          'Failed login attempt from user with incorrect Navidrome credentials',
+          {
+            label: 'Auth',
+            account: { ip: req.ip, username: body.username },
+          }
+        );
+        return next({ status: e.statusCode, message: e.errorCode });
+
+      case ApiErrorCode.NotAdmin:
+        logger.warn(
+          'Failed login attempt from Navidrome user without admin permissions',
+          {
+            label: 'Auth',
+            account: { ip: req.ip, username: body.username },
+          }
+        );
+        return next({ status: e.statusCode, message: e.errorCode });
+
+      default:
+        logger.error(e.message, { label: 'Auth' });
+        return next({ status: 500, message: 'Something went wrong.' });
     }
   }
 });

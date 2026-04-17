@@ -107,6 +107,11 @@ export interface LidarrSettings extends DVRSettings {
   metadataProfileName: string;
 }
 
+export interface NavidromeSettings {
+  name: string;
+  url: string;
+}
+
 interface Quota {
   quotaLimit?: number;
   quotaDays?: number;
@@ -371,6 +376,7 @@ export interface AllSettings {
   main: MainSettings;
   plex: PlexSettings;
   jellyfin: JellyfinSettings;
+  navidrome: NavidromeSettings;
   tautulli: TautulliSettings;
   radarr: RadarrSettings[];
   sonarr: SonarrSettings[];
@@ -440,6 +446,10 @@ class Settings {
         libraries: [],
         serverId: '',
         apiKey: '',
+      },
+      navidrome: {
+        name: '',
+        url: '',
       },
       tautulli: {},
       metadataSettings: {
@@ -647,6 +657,14 @@ class Settings {
 
   set jellyfin(data: JellyfinSettings) {
     this.data.jellyfin = mergeSettings(this.data.jellyfin, data);
+  }
+
+  get navidrome(): NavidromeSettings {
+    return this.data.navidrome;
+  }
+
+  set navidrome(data: NavidromeSettings) {
+    this.data.navidrome = mergeSettings(this.data.navidrome, data);
   }
 
   get tautulli(): TautulliSettings {
