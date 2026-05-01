@@ -1,16 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" fill="none" viewBox="0 0 96 96">
-  <circle cx="48" cy="48" r="48" fill="url(#g1)"/>
-  <g fill="white">
-    <ellipse cx="37" cy="62" rx="8" ry="6" transform="rotate(-15 37 62)"/>
-    <ellipse cx="59" cy="56" rx="8" ry="6" transform="rotate(-15 59 56)"/>
-    <rect x="43" y="24" width="5" height="40" rx="2.5"/>
-    <rect x="65" y="18" width="5" height="40" rx="2.5"/>
-    <rect x="43" y="22" width="27" height="5" rx="2.5"/>
-  </g>
-  <defs>
-    <linearGradient id="g1" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1ed760"/>
-      <stop offset="1" stop-color="#1DB954"/>
-    </linearGradient>
-  </defs>
+<svg width="417" height="417" viewBox="0 0 417 417" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M307.19 391.04C265.394 412.842 221.468 421.16 175.331 412.936C98.257 399.197 43.5409 355.737 15.3772 282.938C-12.8323 210.02 -2.00771 140.73 46.0271 78.6535C78.3101 36.933 121.452 11.1753 173.553 3.06273C253.253 -9.3473 319.817 16.0026 371.207 78.2675C404.482 118.585 419.184 166.079 416.491 218.011C413.165 282.137 385.027 334.081 334.241 373.448C325.866 379.941 316.45 385.092 307.19 391.04ZM179.182 110.049C171.681 104.959 164.18 99.8681 156.418 94.6003C156.418 172.358 156.418 249.42 156.418 327.053C213.354 288.171 269.741 249.664 326.667 210.789C277.245 177.046 228.5 143.766 179.182 110.049Z" fill="url(#paint0_linear_46_77)"/>
+<path d="M179.468 110.268C228.5 143.767 277.244 177.047 326.666 210.789C269.74 249.664 213.353 288.171 156.417 327.053C156.417 249.42 156.417 172.358 156.417 94.6006C164.179 99.8683 171.68 104.959 179.468 110.268Z" fill="black"/>
+<defs>
+<linearGradient id="paint0_linear_46_77" x1="79.5" y1="82.5" x2="350" y2="258" gradientUnits="userSpaceOnUse">
+<stop stop-color="#1ED760"/>
+<stop offset="1" stop-color="#1DB954"/>
+</linearGradient>
+</defs>
 </svg>
