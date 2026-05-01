@@ -458,7 +458,7 @@ router.get('/certifications/tv', isAuthenticated(), async (req, res, next) => {
 
 router.get('/', (_req, res) => {
   return res.status(200).json({
-    api: 'Seerr API',
+    api: 'MusicSeerr API',
     version: '1.0',
   });
 });
